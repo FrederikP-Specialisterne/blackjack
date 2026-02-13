@@ -504,13 +504,9 @@ void play_round(player &dealer, player &p, card_deck &deck, card card1, card car
         }
 
         
-        // BUG NOTICE!!
-        // This is not how I should be counting scores.
-        // I need to compute the value of all cards simultaneously because of aces
-        // Or rather, I could do it like this.. But then I needa way of ensuring that I always count all aces last
         hand round_hand; // The greatest number of cards one can have without busting is 11
 
-        
+
         current_score += get_card_value(card1, current_score);
         current_score += get_card_value(card2, current_score);
 
