@@ -5,6 +5,7 @@
 #define BLACKJACK 22 // Greater than a 21
 #define BUSTED -1
 #define SURRENDER -2
+#define N_CARDS 52
 
 struct card {
     int suit;
@@ -29,7 +30,7 @@ struct card {
 };
 
 struct card_deck {
-    card cards[52];     // List of cards in the deck
+    card cards[N_CARDS];     // List of cards in the deck
     int top_card = 0;   // Tracks index of top card (i.e, how many cards are left in the deck)
 };
 
@@ -50,18 +51,6 @@ void add_to_hand(hand &h, card &c) {
     }
 }
 
-card draw_card(card_deck &deck) {
-    /*
-    I do not check whether there are any cards left to draw,
-    because the deck will is reset between games, so it will never run out.
-    Might be a relevant check to implement in the future
-    */
-    card drawn_card = deck.cards[deck.top_card];
-    deck.top_card++;
-    return drawn_card;
-
-}
-
 struct player {
     bool isDealer = false;  // Players are not the dealer by default
     int id;
@@ -70,6 +59,7 @@ struct player {
     int base_bet;
     int bet_list[16];
     card starting_hand[2];
+    int n_splits = 0;
 };
 
 void player_init(player players[5]) {
@@ -224,7 +214,7 @@ void print_card(card c, bool capitalized) {
 }
 
 void print_deck(card_deck deck){
-    for (int i = 0; i < 52; i++) {
+    for (int i = 0; i < N_CARDS; i++) {
         print_card(deck.cards[i], true);
         std::cout << std::endl;
     }
@@ -243,6 +233,12 @@ void deck_init(card_deck &deck) {
     }
 }
 
+void swap_cards(card &c1, card &c2) {
+    card temp = c1;
+    c1 = c2;
+    c2 = temp;
+}
+
 void reset_scores(player players[5]) {
     for (int i = 0; i < 5; i++) {
         players[i].base_bet = 0;
@@ -255,18 +251,131 @@ void reset_scores(player players[5]) {
 
 void deck_shuffle(card_deck &deck) {
     // Fisher-Yates shuffling algorithm
-    for(int i = 51; i >= 0; i--) {  // Start from the end and move to the start
+    for(int i = N_CARDS - 1; i >= 0; i--) {  // Start from the end and move to the start
         int j = rand() % (i+1);     // A random integer between 0 and the first index
-        // Swap them
-
-        card temp = deck.cards[i];
-        deck.cards[i] = deck.cards[j];
-        deck.cards[j] = temp;
+        swap_cards(deck.cards[i], deck.cards[j]);
     }
     deck.top_card = 0;
 }
 
-int get_n_players() {
+card draw_card(card_deck &deck) {
+    if (deck.top_card < N_CARDS) {
+        card drawn_card = deck.cards[deck.top_card];
+        deck.top_card++;
+        return drawn_card;
+    } else {
+        std::cout << "The dealer has run out of cards... Wow..." << std::endl;
+        std::cout << "They pull out and shuffle a brand new deck of cards." << std::endl;
+        /*
+        Shuffling the deck this way makes it possible for a player to do more than 15 splits... 
+        I can't be bothered to deal with this right now.. It is simply too pathological of an edge case
+        */
+        deck_shuffle(deck);
+        return draw_card(deck);
+    }
+}
+
+void rig_deck(card_deck &deck, int type) {
+    /*
+    Arranges the deck in a particular way according to the type of rigging
+    Used for debugging & unit testing
+    0: Arrange by number instead of suits (aces first)
+    1: Maximize number of splits
+    */
+   int rev = N_CARDS - 1; // Indexing for reversed order
+    switch (type) {
+        case 0:
+            for (int v=0; v < 13; v++) {        // Range voer each card value
+                for (int s=0; s < 4; s++) {     // Range over each card suit
+                    // There are 13 cards in each suit, 13 x suit + value
+                    deck.cards[rev - (4 * v + s)].suit = s;
+                    deck.cards[rev - (4 * v + s)].val  = v;
+                }
+            }
+        case 1:
+            for (int v=0; v < 13; v++) {        // Range voer each card value
+                for (int s=0; s < 4; s++) {     // Range over each card suit
+                    // There are 13 cards in each suit, 13 x suit + value
+                    deck.cards[rev - (4 * v + s)].suit = s;
+                    deck.cards[rev - (4 * v + s)].val  = v;
+                }
+            }
+            /*
+            Order that we need:
+            P4:     10, 10
+            P3:     09, 09
+            P2:     08, 08
+            P1:     07, 07
+            Dealer: 06, 06
+            P4:     All the face cards (14 remaining)
+            P3:     09, 09
+            ...
+            */
+            // Replace the aces at the start with 10s
+            /*
+            for (int i = 0; i < 4; i++) {
+                swap_cards(deck.cards[i], deck.cards[i+16]);
+            }
+            */
+            // Give the dealer two aces instead
+            swap_cards(deck.cards[0], deck.cards[4*4 + 2]);
+            swap_cards(deck.cards[1], deck.cards[4*4 + 3]);
+            swap_cards(deck.cards[2], deck.cards[5*4 + 0]);
+            swap_cards(deck.cards[3], deck.cards[5*4 + 1]);
+            swap_cards(deck.cards[4], deck.cards[6*4 + 0]);
+            swap_cards(deck.cards[5], deck.cards[6*4 + 1]);
+            swap_cards(deck.cards[6], deck.cards[7*4 + 0]);
+            swap_cards(deck.cards[7], deck.cards[7*4 + 1]);
+            swap_cards(deck.cards[8], deck.cards[8*4 + 0]);
+            swap_cards(deck.cards[9], deck.cards[8*4 + 1]);
+
+            swap_cards(deck.cards[4*4 + 2], deck.cards[6*4 + 0]);
+            swap_cards(deck.cards[4*4 + 3], deck.cards[6*4 + 1]);
+            swap_cards(deck.cards[5*4 + 0], deck.cards[7*4 + 0]);
+            swap_cards(deck.cards[5*4 + 1], deck.cards[7*4 + 1]);
+
+            swap_cards(deck.cards[5*4 + 2], deck.cards[6*4 + 0]);
+            swap_cards(deck.cards[5*4 + 3], deck.cards[6*4 + 1]);
+            
+            swap_cards(deck.cards[5*4 + 2], deck.cards[8*4 + 0]);
+            swap_cards(deck.cards[5*4 + 3], deck.cards[8*4 + 1]);
+
+            swap_cards(deck.cards[6*4 + 0], deck.cards[51]);
+            swap_cards(deck.cards[6*4 + 1], deck.cards[50]);
+            swap_cards(deck.cards[6*4 + 2], deck.cards[49]);
+            swap_cards(deck.cards[6*4 + 3], deck.cards[48]);
+
+            swap_cards(deck.cards[7*4 + 2], deck.cards[47]);
+            swap_cards(deck.cards[7*4 + 3], deck.cards[46]);
+            
+            
+            swap_cards(deck.cards[10*4 + 0], deck.cards[51]);
+            swap_cards(deck.cards[10*4 + 1], deck.cards[50]);
+
+            swap_cards(deck.cards[11*4 + 2], deck.cards[12*4 + 0]);
+            swap_cards(deck.cards[11*4 + 3], deck.cards[12*4 + 1]);
+            
+            /*
+            std::cout << "Do we want to swap ";
+            print_card(deck.cards[12*4 + 0], false);
+            std::cout << " with ";
+            print_card(deck.cards[11*4 + 2], false);
+            std::cout << "?\n";
+            */
+
+
+
+            //swap_cards(deck.cards[11*4 + 0], deck.cards[49]);
+            //swap_cards(deck.cards[11*4 + 1], deck.cards[48]);
+            //swap_cards(deck.cards[12*4 + 0], deck.cards[47]);
+            //swap_cards(deck.cards[12*4 + 1], deck.cards[46]);
+
+    
+    }
+
+}
+
+int get_n_players(void) {
     char inp;
     std::cout << "Please enter the number of players (1-4) or enter \'q\' to quit." << std::endl;
     while (true) { // Keep trying until valid input is entered
@@ -296,10 +405,10 @@ int get_next_move(player &p, int cards_in_turn, int current_score, bool ace_spli
         bool is_move_legal[4] = {false, true, false, false};
         int num_legal_moves = 1;
         int moves_counted = 0;
-        std::string move_names[4] = {"\"Stand\"",
-                                     "\"Fold\"",
-                                     "\"Double down\"",
-                                     "\"Surrender\""};
+        std::string move_names[4] = {"Hit",
+                                     "Stand",
+                                     "Double down",
+                                     "Surrender"};
         int num_moves = sizeof(move_names) / sizeof(move_names[0]);
 
         if (!ace_split) { // You cannot draw additional cards after an ace split
@@ -316,20 +425,22 @@ int get_next_move(player &p, int cards_in_turn, int current_score, bool ace_spli
         }
 
         
-        std::string legal_moves_string = "You can ";
+        std::string legal_moves_string = "You can \"";
         for (int i = 0; i < num_moves; i++) {
             if (moves_counted == num_legal_moves - 1) {
-                legal_moves_string += "or ";
+                legal_moves_string = legal_moves_string.substr(0,legal_moves_string.length() - 1);
+                legal_moves_string += "or \"";
             }
+            moves_counted++;
             if (is_move_legal[i]) {
                 legal_moves_string += move_names[i];
-                moves_counted++;
                 if (moves_counted < num_legal_moves) {
-                    legal_moves_string += ", ";
+                    legal_moves_string += "\", \"";
                 }
             }
 
         }
+        legal_moves_string += "\"";
 
         std::cout << "You are currently at " << current_score << std::endl;
         std::cout << "What would you like to do?" << std::endl;
@@ -349,7 +460,6 @@ int get_next_move(player &p, int cards_in_turn, int current_score, bool ace_spli
             
             for (int move_id = 0; move_id < num_moves; move_id++) {
                 std::string s2 = move_names[move_id];
-                s2 = s2.substr(1,s2.length() - 2); // Removes the quotation marks
                 for (int i = 0; i < s2.length(); i++) {
                     s2[i] = tolower(s2[i]);
                 }
@@ -397,7 +507,7 @@ bool top_draw_blackjack(card c1, card c2) {
     return false;               // We have no blackjack...
 }
 
-bool yes_or_no() {
+bool yes_or_no(void) {
     char inp;
     while (true) { // Keep trying until valid input is entered
         std::cin >> inp; // Read input from user
@@ -431,24 +541,79 @@ Handles the logic for a single round of blackjack (player or dealer)
 Note how this is essentially just a wrapper for itself (it is overloaded right below)
 This id done in order to handle split-rounds recursively
 */
-void play_round(player &dealer, player &p, card_deck &deck, card card1, card card2, bool ace_split, int hand_id) {
+void play_round(player &dealer, player &p, card_deck &deck, card card1, card card2, bool ace_split) {
+    int hand_id = p.n_splits;
     if (p.bet_list[hand_id] == 0) {
         increase_bet(p,hand_id);
     }
+
     int current_score = 0;
 
-    // Print out what cards the player has
     if (!p.isDealer) {
+        // Print out what cards the player has
         std::cout << "You got "
-        << ((card1.val == 12) ? "an " : "a ");
-        print_card(card1, false);
+                  << ((card1.val == 12) ? "an " : "a ");
+                       print_card(card1, false);
         std::cout << " and "
-        << ((card2.val == 12) ? "an " : "a ");
-        print_card(card2, false);
+                  << ((card2.val == 12) ? "an " : "a ");
+                       print_card(card2, false);
         std::cout << "."
-        << std::endl;
+                  << std::endl;
+
+        // Print out dealer's top card
+        std::cout << "The dealer has "
+                  << ((dealer.starting_hand[0].val == 12) ? "an " : "a ");
+                       print_card(dealer.starting_hand[0], false);
+        std::cout << " face up."
+                  << std::endl;
+
+        // If the first two cards are the same, splitting is an option (Provided there is enough bank balance)
+        if (card1.val == card2.val || (is_face_card(card1) && is_face_card(card2))) {
+            if (p.bank_account > p.base_bet) {
+
+                std::cout << "Would you like to split your two cards (y/n)"
+                            << std::endl;
+                std::cout << "It will cost another bet of $"
+                            << p.base_bet
+                            << ". ";
+                std::cout << "You have $"
+                            << p.bank_account
+                            << " in your account."
+                            << std::endl;
+
+                if (yes_or_no()) {
+                    bool is_ace_split = false;
+                    if (card1.val == 12) {
+                        is_ace_split = true;
+                    }
+
+                    p.n_splits ++;
+                    card card3 = draw_card(deck);
+                    play_round(dealer, p, deck, card1, card3, is_ace_split);
+                    
+                    p.n_splits--;
+
+                    card card4 = draw_card(deck);
+                    play_round(dealer, p, deck, card2, card4, is_ace_split);
+
+                    return;
+                }
+            } else { // There is a split, but funds are insufficient
+                std::cout << "You do not have enough money to place another bet for a split." << std::endl;
+            }
+        }
+    } else {
+        // Print out everything the dealer has
+        std::cout << "They got "
+                  << ((card1.val == 12) ? "an " : "a ");
+                       print_card(card1, false);
+        std::cout << " and "
+                  << ((card2.val == 12) ? "an " : "a ");
+                       print_card(card2, false);
+        std::cout << "."
+                  << std::endl;
     }
-    
+
     // First check if there is blackjack, and proceed if so
     if (top_draw_blackjack(card1,card2)) {
         std::cout << "That's a blackjack! "
@@ -457,138 +622,98 @@ void play_round(player &dealer, player &p, card_deck &deck, card card1, card car
         current_score = BLACKJACK;
         p.hand_values[hand_id] = current_score;
         return;
-    } else {
-        // We don't have blackjack. Proceed as normally
-        // Print out what the dealer has
-        std::cout << "The dealer has "
-                  << ((dealer.starting_hand[0].val == 12) ? "an " : "a ");
-                     print_card(dealer.starting_hand[0], false);
-        std::cout << " face up."
-                  << std::endl;
+    }
+    // We don't have blackjack. Proceed as normally
+    
+    
+    hand round_hand; // The greatest number of cards one can have without busting is 11
+    
+    add_to_hand(round_hand, card1);
+    add_to_hand(round_hand, card2);
 
-        if (!p.isDealer) {
-            // If the first two cards are the same, splitting is an option (Provided there is enough bank balance)
-            if (card1.val == card2.val || (is_face_card(card1) && is_face_card(card2))) {
-                if (p.bank_account > p.base_bet) {
+    current_score = get_hand_value(round_hand);
 
-                    std::cout << "Would you like to split your two cards (y/n)"
-                              << std::endl;
-                    std::cout << "It will cost another bet of $"
-                              << p.base_bet
-                              << ". ";
-                    std::cout << "You have $"
-                              << p.bank_account
-                              << " in your account."
-                              << std::endl;
-
-                    if (yes_or_no()) {
-                        bool is_ace_split = false;
-                        if (card1.val == 12) {
-                            is_ace_split = true;
-                        }
-                        // BUG NOTICE!!
-                        // This is not how I should be handling the split ID.
-                        // I need a way of assigning each split a unique ID
-                        card card3 = draw_card(deck);
-                        play_round(dealer, p, deck, card1, card3, is_ace_split, hand_id);
-
-                        card card4 = draw_card(deck);
-                        play_round(dealer, p, deck, card2, card4, is_ace_split, hand_id + 1);
-
-                        return;
-                    }
-                } else { // There is a split, but funds are insufficient
-                    std::cout << "You do not have enough money to place another bet for a split." << std::endl;
-                }
-            }
+    int cards_in_turn = 1; // To ensure doubling down and surrendering only is possible on 2 cards
+    bool is_done = false;
+    while (true) {
+        if (current_score == 21) {
+            
+            std::cout << ((p.isDealer) ? "They" : "You")
+                        << " hit 21. "
+                        << ((p.isDealer) ? "Oof!" : "Nice!")
+                        << std::endl;
+            p.hand_values[hand_id] = current_score;
+            is_done = true;
+        } else if (current_score > 21) {
+            std::cout << ((p.isDealer) ? "They" : "You")
+                        << " have busted."
+                        << std::endl;
+            current_score = BUSTED;
+            p.hand_values[hand_id] = current_score;             
+            is_done = true;
         }
-
+        if (is_done) {
+            return;
+        }
+        cards_in_turn++;
         
-        hand round_hand; // The greatest number of cards one can have without busting is 11
-
-
-        current_score += get_card_value(card1, current_score);
-        current_score += get_card_value(card2, current_score);
-
-        int cards_in_turn = 1; // To ensure doubling down and surrendering only is possible on 2 cards
-        bool is_done = false;
-        while (true) {
-            if (current_score == 21) {
-                
+        int next_move = get_next_move(p, cards_in_turn, current_score, ace_split);
+        
+        switch (next_move) {
+            card new_card;
+            case 0: // Hit
+                new_card = draw_card(deck);
+                add_to_hand(round_hand, new_card);
+                current_score = get_hand_value(round_hand);
                 std::cout << ((p.isDealer) ? "They" : "You")
-                          << " hit 21. "
-                          << ((p.isDealer) ? "Oof!" : "Nice!")
-                          << std::endl;
+                            << " drew "
+                            << ((new_card.val == 12) ? "an " : "a ");
+                                print_card(new_card,false);
+                std::cout << "."
+                            << std::endl;
+                
+                break;
+
+            case 1: // Stand
                 p.hand_values[hand_id] = current_score;
                 is_done = true;
-            } else if (current_score > 21) {
-                std::cout << ((p.isDealer) ? "They" : "You")
-                          << " have busted."
-                          << std::endl;
-                current_score = BUSTED;
-                p.hand_values[hand_id] = current_score;             
+                break;
+
+            case 2: // Double down
+                increase_bet(p,hand_id);
+
+                new_card = draw_card(deck);
+                add_to_hand(round_hand, new_card);
+                current_score = get_hand_value(round_hand);
+                p.hand_values[hand_id] = current_score;
+                std::cout << "You drew "
+                            << ((new_card.val == 12) ? "an " : "a ");
+                                print_card(new_card,false);
+                std::cout << "."
+                            << std::endl;
+
                 is_done = true;
-            }
-            if (is_done) {
-                return;
-            }
-            cards_in_turn++;
-            
-            int next_move = get_next_move(p, cards_in_turn, current_score, ace_split);
-            
-            switch (next_move) {
-                card new_card;
-                case 0: // Stand
-                    new_card = draw_card(deck);
-                    current_score += get_card_value(new_card, current_score);
-                    std::cout << ((p.isDealer) ? "They" : "You")
-                              << " drew "
-                              << ((new_card.val == 12) ? "an " : "a ");
-                                 print_card(new_card,false);
-                    std::cout << "."
-                              << std::endl;
-                    
-                    break;
+                break;
 
-                case 1: // Fold
-                    p.hand_values[hand_id] = current_score;
-                    is_done = true;
-                    break;
+            case 3: // Surrender
+                current_score = SURRENDER;
+                p.hand_values[hand_id] = current_score;
+                //p.bank_account += p.bet_list[hand_id] / 2;
 
-                case 2: // Double down
-                    increase_bet(p,hand_id);
-
-                    new_card = draw_card(deck);
-                    current_score += get_card_value(new_card, current_score);
-                    p.hand_values[hand_id] = current_score;
-                    std::cout << "You drew "
-                              << ((new_card.val == 12) ? "an " : "a ");
-                                 print_card(new_card,false);
-                    std::cout << "."
-                              << std::endl;
-
-                    is_done = true;
-                    break;
-
-                case 3: // Surrender
-                    current_score = SURRENDER;
-                    p.hand_values[hand_id] = current_score;
-                    p.bank_account += p.bet_list[hand_id] / 2;
-
-                    is_done = true;
-                    break;
-            }   
-        }
-    }       // At the end of the round, gotta add a check for whether a player still has any money left to play with
+                is_done = true;
+                break;
+        }   
+    }
+           // At the end of the round, gotta add a check for whether a player still has any money left to play with
 }
 // Now we overload it
 void play_round(player &dealer, player &p, card_deck &deck) {
     std::cout << ((p.isDealer) ? "Dealer\'s" : ("Player " + std::to_string(p.id) + "\'s")) << " turn." << std::endl;
-    play_round(dealer, p, deck, p.starting_hand[0], p.starting_hand[1], false, 0);
+    play_round(dealer, p, deck, p.starting_hand[0], p.starting_hand[1], false);
 }
 
-void resolve_round(player players[5]) {
-    for (int p_id = 4 ; p_id >= 0; p_id--) {
+void resolve_round(player players[5], int n_players) {
+    for (int p_id = n_players ; p_id >= 0; p_id--) {
         std::cout << "Player " << p_id << ": ";
         for (int hand = 0; hand < 16; hand++) {
             std::cout << players[p_id].hand_values[hand] << ",\t";
@@ -600,9 +725,31 @@ void resolve_round(player players[5]) {
     if (players[0].hand_values[0] == BLACKJACK) {
         std::cout << "The dealer has a blackjack" << std::endl;
     }
-    for (int p_id = 4 ; p_id > 0; p_id--) {
+    for (int p_id = n_players ; p_id > 0; p_id--) {
+        int wins = 0;
+        int loss = 0;
+        int ties = 0;
         for (int hand = 0; hand < 16; hand++) {
             if (players[p_id].hand_values[hand] != 0) {
+                if (players[p_id].hand_values[hand] > players[0].hand_values[0]) {
+                    wins++;
+                    if (players[p_id].hand_values[hand] == BLACKJACK) {
+                        players[p_id].bank_account += players[p_id].bet_list[hand] * 2.5;
+                    } else {
+                        players[p_id].bank_account += 2 * players[p_id].bet_list[hand];
+                    }
+                } else if (players[p_id].hand_values[hand] == players[0].hand_values[0]) {
+                    ties++;
+                    players[p_id].bank_account += players[p_id].bet_list[hand];
+                } else {
+                    loss++;
+                    if (players[p_id].hand_values[hand] == SURRENDER) {
+                        players[p_id].bank_account += players[p_id].bet_list[hand] / 2;
+                    }
+                }
+                
+                
+                /*
                 std::cout << "Player "
                           << p_id 
                           << ": You have a hand ";
@@ -613,13 +760,30 @@ void resolve_round(player players[5]) {
                               << players[p_id].hand_values[hand]
                               << std::endl;
                 }
+
+                */
+
             }
         }
+    std::cout << "Player "
+              << p_id 
+              << ": You have "
+              << wins
+              << " winning "
+              << ((wins == 1) ? "hand, " : "hands, ")
+              << loss
+              << " loosing "
+              << ((loss == 1) ? "hand, " : "hands, ")
+              << "and "
+              << ties
+              << " ties.\n"
+              << std::endl;
+
     }
 }
 
 
-int main() {
+int main(void) {
 
     // Game setup
     srand(time(0)); // Set the seed for the random number generator
@@ -646,6 +810,8 @@ int main() {
 
         // Get the game state ready
         deck_shuffle(deck);
+        //rig_deck(deck, 1);
+        //print_deck(deck);
         reset_scores(players);
         
         // First, everyone makes their bets
@@ -665,7 +831,7 @@ int main() {
         }
 
         // Finally, showdown.
-        resolve_round(players);
+        resolve_round(players, n_players);
 
 
     }
